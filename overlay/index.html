@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bite Size AI — Global Activity</title>
+<!-- ext-resource-dependency: d3 -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<!-- ext-resource-dependency: topojson-client -->
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    /* Calm Lagoon palette */
+    --bs-primary:#0B7D74;
+    --bs-bright:#5FC7BA;
+    --bs-light:#C6EEE8;
+    --bs-deep:#094843;
+    --bs-mid:#2BA89A;
+    --bs-ink:#071512;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(120% 120% at 50% 35%, #0b2421 0%, #071714 46%, #030a09 100%);
+    color:#CFEFE9;
+    font-family:"Inter","Helvetica Neue",system-ui,sans-serif;
+    overflow:hidden;
+    height:100vh;
+  }
+  #stage{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:grab;
+  }
+  #stage.dragging{cursor:grabbing;}
+  canvas{display:block;touch-action:none;}
+
+  /* HUD */
+  .hud{
+    position:fixed;
+    pointer-events:none;
+    z-index:5;
+    font-weight:500;
+    letter-spacing:.04em;
+  }
+  #brand{
+    top:38px;left:46px;
+    display:flex;align-items:center;gap:14px;
+  }
+  #brand .mark{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(150deg,var(--bs-bright),var(--bs-primary));
+    box-shadow:0 0 24px rgba(43,168,154,.55), inset 0 0 0 1px rgba(255,255,255,.25);
+    position:relative;flex:none;
+  }
+  #brand .mark::after{
+    content:"";position:absolute;inset:8px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.9);
+    border-right-color:transparent;border-bottom-color:transparent;
+    transform:rotate(35deg);
+  }
+  #brand .txt{line-height:1.15;}
+  #brand .txt b{font-size:16px;font-weight:700;color:#EAFBF7;letter-spacing:.02em;}
+  #brand .txt span{display:block;font-size:11px;color:#6f968e;letter-spacing:.22em;text-transform:uppercase;margin-top:2px;}
+
+  #status{
+    bottom:40px;left:46px;
+    font-size:12px;color:#7fa79f;letter-spacing:.18em;text-transform:uppercase;
+    display:flex;align-items:center;gap:10px;
+  }
+  #status .dot{
+    width:8px;height:8px;border-radius:50%;background:var(--bs-bright);
+    box-shadow:0 0 12px var(--bs-bright);
+    animation:blink 1.8s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+  #metrics{
+    bottom:40px;right:46px;text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  #metrics .row{display:flex;justify-content:flex-end;align-items:baseline;gap:10px;margin-top:8px;}
+  #metrics .row:first-child{margin-top:0;}
+  #metrics .num{font-size:22px;font-weight:700;color:#EAFBF7;letter-spacing:.01em;}
+  #metrics .lab{font-size:10px;color:#6f968e;letter-spacing:.2em;text-transform:uppercase;width:118px;}
+
+  #hint{
+    top:42px;right:46px;
+    font-size:11px;color:#5a807a;letter-spacing:.16em;text-transform:uppercase;
+  }
+
+  #loader{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    z-index:20;color:#7fa79f;font-size:13px;letter-spacing:.2em;text-transform:uppercase;
+    transition:opacity .6s ease;
+  }
+  #loader.hide{opacity:0;pointer-events:none;}
+
+  /* ---- Packet trace panel ---- */
+  #trace{
+    top:104px;left:46px;width:312px;
+    max-height:calc(100vh - 200px);
+    display:flex;flex-direction:column;
+    background:linear-gradient(180deg, rgba(8,32,29,.62), rgba(6,22,20,.5));
+    border:1px solid rgba(95,199,186,.18);
+    border-radius:14px;
+    box-shadow:0 18px 50px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.05);
+    backdrop-filter:blur(14px) saturate(1.1);
+    -webkit-backdrop-filter:blur(14px) saturate(1.1);
+    overflow:hidden;
+  }
+  #trace .tHead{padding:16px 18px 12px;border-bottom:1px solid rgba(95,199,186,.12);}
+  #trace .tTitle{font-size:10px;letter-spacing:.28em;color:#5fc7ba;text-transform:uppercase;font-weight:600;}
+  #trace .tTarget{display:flex;align-items:baseline;gap:10px;margin-top:9px;}
+  #trace .tTarget b{font-size:18px;font-weight:700;color:#EAFBF7;letter-spacing:.01em;}
+  #trace .tTarget span{font-size:11px;color:#6f968e;font-variant-numeric:tabular-nums;font-family:ui-monospace,"SF Mono",Menlo,monospace;}
+  #trace .tMeta{display:flex;gap:16px;margin-top:8px;font-size:10.5px;letter-spacing:.16em;text-transform:uppercase;color:#7fa79f;}
+  #trace .tMeta b{color:#C6EEE8;font-weight:600;font-variant-numeric:tabular-nums;}
+  #trace .tRows{padding:8px 8px;overflow-y:auto;pointer-events:auto;scrollbar-width:thin;scrollbar-color:rgba(95,199,186,.3) transparent;}
+  #trace .tRows::-webkit-scrollbar{width:6px;}
+  #trace .tRows::-webkit-scrollbar-thumb{background:rgba(95,199,186,.3);border-radius:3px;}
+  .hop{
+    display:grid;grid-template-columns:20px 1fr auto;gap:10px;align-items:center;
+    padding:7px 10px;border-radius:9px;
+    opacity:.34;transition:opacity .35s ease, background .35s ease;
+  }
+  .hop.done{opacity:.7;}
+  .hop.active{opacity:1;background:rgba(95,199,186,.10);box-shadow:inset 0 0 0 1px rgba(95,199,186,.22);}
+  .hop .n{font-size:10px;color:#5a807a;font-variant-numeric:tabular-nums;text-align:right;}
+  .hop.active .n{color:#5fc7ba;}
+  .hop .body{min-width:0;}
+  .hop .host{font-size:11.5px;color:#DCF3EE;font-family:ui-monospace,"SF Mono",Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hop .sub{font-size:10px;color:#7fa79f;margin-top:2px;letter-spacing:.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hop .sub .asn{color:#5fc7ba;opacity:.85;}
+  .hop .ms{font-size:12px;color:#C6EEE8;font-variant-numeric:tabular-nums;font-weight:600;}
+  .hop.pending .ms{color:#4d6a64;}
+  .hop .dest{display:inline-block;margin-left:6px;font-size:8.5px;letter-spacing:.12em;color:#071512;background:#5fc7ba;border-radius:4px;padding:1px 5px;vertical-align:middle;text-transform:uppercase;font-weight:700;}
+  #trace .tNote{padding:10px 18px 14px;font-size:9.5px;letter-spacing:.06em;color:#557d76;border-top:1px solid rgba(95,199,186,.1);}
+
+  /* ---- Route selector pills ---- */
+  #routes{
+    bottom:38px;left:50%;transform:translateX(-50%);
+    display:flex;gap:8px;pointer-events:auto;
+    background:rgba(8,28,26,.5);border:1px solid rgba(95,199,186,.14);
+    border-radius:999px;padding:6px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  }
+  #routes .pill{
+    font:inherit;font-size:11.5px;letter-spacing:.02em;color:#9cc3bc;
+    background:transparent;border:0;border-radius:999px;
+    padding:8px 16px;cursor:pointer;white-space:nowrap;transition:all .25s ease;
+  }
+  #routes .pill:hover{color:#DCF3EE;background:rgba(95,199,186,.08);}
+  #routes .pill.on{color:#04100e;background:linear-gradient(150deg,#7adccf,#2BA89A);font-weight:600;box-shadow:0 4px 16px rgba(43,168,154,.35);}
+
+  @media (max-width:760px){
+    #trace{display:none;}
+    #metrics{display:none;}
+    #routes .pill{padding:8px 11px;font-size:10.5px;}
+  }
+
+  /* ---- Master overlay toggle ---- */
+  #toggleWrap{
+    top:36px;right:46px;display:flex;align-items:center;gap:12px;pointer-events:auto;
+  }
+  #toggleWrap .tgLabel{font-size:11px;letter-spacing:.2em;text-transform:uppercase;color:#8fb3ab;font-weight:500;}
+  .switch{
+    width:48px;height:26px;border-radius:999px;padding:0;cursor:pointer;position:relative;
+    border:1px solid rgba(95,199,186,.3);background:rgba(95,199,186,.12);transition:all .25s ease;
+  }
+  .switch .knob{position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#7fa79f;transition:all .25s ease;}
+  .switch.on{background:linear-gradient(150deg,#2BA89A,#0B7D74);border-color:rgba(122,220,207,.55);box-shadow:0 0 16px rgba(43,168,154,.4);}
+  .switch.on .knob{left:24px;background:#EAFBF7;}
+  #dragHint{
+    top:74px;right:46px;font-size:11px;color:#5a807a;letter-spacing:.16em;text-transform:uppercase;
+    opacity:0;transition:opacity .3s ease;
+  }
+  body.overlay-off #dragHint{opacity:1;}
+  body.overlay-off #trace,
+  body.overlay-off #routes,
+  body.overlay-off #status{opacity:0;pointer-events:none;transform:translateY(6px);}
+  #trace,#routes,#status{transition:opacity .35s ease, transform .35s ease;}
+
+  /* ---- My Network card ---- */
+  .netCount{display:flex;align-items:baseline;gap:8px;margin-top:9px;}
+  .netCount b{font-size:24px;font-weight:700;color:#EAFBF7;font-variant-numeric:tabular-nums;letter-spacing:.01em;}
+  .netCount span{font-size:11px;color:#7fa79f;letter-spacing:.05em;}
+  .featured{padding:16px 18px;display:flex;gap:14px;align-items:center;border-bottom:1px solid rgba(95,199,186,.1);min-height:86px;}
+  .avatar{
+    width:54px;height:54px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:18px;font-weight:700;color:#04100e;letter-spacing:.02em;
+    background:linear-gradient(150deg,#7adccf,#2BA89A);
+    box-shadow:0 0 20px rgba(43,168,154,.45), inset 0 0 0 1px rgba(255,255,255,.25);
+  }
+  .fInfo{min-width:0;}
+  .fName{font-size:16px;font-weight:700;color:#EAFBF7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fCompany{font-size:12px;color:#5fc7ba;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .fPos{font-size:11px;color:#7fa79f;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chips{padding:13px 15px;display:flex;flex-wrap:wrap;gap:7px;overflow-y:auto;}
+  .chip{
+    width:34px;height:34px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+    font-size:11px;font-weight:600;color:#9cc3bc;background:rgba(95,199,186,.1);
+    border:1px solid rgba(95,199,186,.16);transition:all .3s ease;
+  }
+  .chip.on{color:#04100e;background:linear-gradient(150deg,#7adccf,#2BA89A);transform:scale(1.1);box-shadow:0 0 14px rgba(43,168,154,.4);}
+  #panelInner{display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden;}
+  #trace .tRows,.chips{flex:1 1 auto;min-height:0;}
+
+  /* ---- My Network terminal ---- */
+  .termHead{display:flex;align-items:center;gap:7px;padding:13px 16px;border-bottom:1px solid rgba(95,199,186,.12);}
+  .termHead i{width:9px;height:9px;border-radius:50%;display:block;flex:none;}
+  .termHead .r{background:#cf6a5e;} .termHead .y{background:#c8a85a;} .termHead .g{background:#5fc7ba;}
+  .termHead .termTitle{font:11px ui-monospace,"SF Mono",Menlo,monospace;color:#7fa79f;letter-spacing:.12em;margin-left:6px;}
+  .termPrompt{padding:11px 16px 5px;font:11.5px/1.5 ui-monospace,"SF Mono",Menlo,monospace;color:#5fc7ba;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .termPrompt .cnt{color:#557d76;}
+  .termBody{
+    flex:1 1 auto;min-height:0;overflow:hidden;padding:4px 16px 14px;
+    font:11.5px/1.55 ui-monospace,"SF Mono",Menlo,monospace;
+    -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 26px);
+    mask-image:linear-gradient(to bottom, transparent 0, #000 26px);
+  }
+  .tline{display:flex;gap:9px;white-space:nowrap;animation:lineIn .16s ease;}
+  .tline .tId{color:#3f6f67;flex:none;}
+  .tline .tNm{color:#DCF3EE;flex:none;}
+  .tline .tCo{color:#6f968e;overflow:hidden;text-overflow:ellipsis;}
+  .termBody .caret{display:inline-block;width:7px;height:13px;background:#5fc7ba;vertical-align:-2px;margin-left:2px;animation:caretBlink 1s step-end infinite;}
+  @keyframes lineIn{from{transform:translateY(3px);}to{transform:none;}}
+  @keyframes caretBlink{50%{opacity:0;}}
+</style>
+</head>
+<body>
+  <div id="stage" data-screen-label="Globe">
+    <canvas id="globe"></canvas>
+  </div>
+
+  <div class="hud" id="brand">
+    <div class="mark"></div>
+    <div class="txt"><b>Bite Size AI</b><span>Global Activity Network</span></div>
+  </div>
+  <div class="hud" id="toggleWrap">
+    <span class="tgLabel">Globe overlay</span>
+    <button id="overlayToggle" class="switch on" role="switch" aria-checked="true" aria-label="Toggle globe overlay"><span class="knob"></span></button>
+  </div>
+  <div class="hud" id="dragHint">Drag to rotate</div>
+  <div class="hud" id="status"><span class="dot"></span><span id="statusText">Live · mapping network</span></div>
+  <div class="hud" id="metrics">
+    <div class="row"><span class="num" id="mNodes">0</span><span class="lab">Active nodes</span></div>
+    <div class="row"><span class="num" id="mReq">0</span><span class="lab">Requests / sec</span></div>
+    <div class="row"><span class="num" id="mLat">0</span><span class="lab">Avg latency ms</span></div>
+  </div>
+
+  <div class="hud" id="trace"><div id="panelInner"></div></div>
+
+  <div class="hud" id="routes"></div>
+
+  <div id="loader">Initializing global mesh…</div>
+
+  <script src="globe.js"></script>
+  <script src="connections.js"></script>
+  <script src="trace.js"></script>
+</body>
+</html>

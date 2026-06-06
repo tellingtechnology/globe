@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bite Size AI — Global Activity</title>
+<!-- ext-resource-dependency: d3 -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<!-- ext-resource-dependency: topojson-client -->
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<style>
+  :root{
+    /* Calm Lagoon palette */
+    --bs-primary:#0B7D74;
+    --bs-bright:#5FC7BA;
+    --bs-light:#C6EEE8;
+    --bs-deep:#094843;
+    --bs-mid:#2BA89A;
+    --bs-ink:#071512;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    background:
+      radial-gradient(120% 120% at 50% 35%, #0b2421 0%, #071714 46%, #030a09 100%);
+    color:#CFEFE9;
+    font-family:"Inter","Helvetica Neue",system-ui,sans-serif;
+    overflow:hidden;
+    height:100vh;
+  }
+  #stage{
+    position:fixed;
+    inset:0;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:grab;
+  }
+  #stage.dragging{cursor:grabbing;}
+  canvas{display:block;touch-action:none;}
+
+  /* HUD */
+  .hud{
+    position:fixed;
+    pointer-events:none;
+    z-index:5;
+    font-weight:500;
+    letter-spacing:.04em;
+  }
+  #brand{
+    top:38px;left:46px;
+    display:flex;align-items:center;gap:14px;
+  }
+  #brand .mark{
+    width:34px;height:34px;border-radius:9px;
+    background:linear-gradient(150deg,var(--bs-bright),var(--bs-primary));
+    box-shadow:0 0 24px rgba(43,168,154,.55), inset 0 0 0 1px rgba(255,255,255,.25);
+    position:relative;flex:none;
+  }
+  #brand .mark::after{
+    content:"";position:absolute;inset:8px;border-radius:50%;
+    border:2px solid rgba(255,255,255,.9);
+    border-right-color:transparent;border-bottom-color:transparent;
+    transform:rotate(35deg);
+  }
+  #brand .txt{line-height:1.15;}
+  #brand .txt b{font-size:16px;font-weight:700;color:#EAFBF7;letter-spacing:.02em;}
+  #brand .txt span{display:block;font-size:11px;color:#6f968e;letter-spacing:.22em;text-transform:uppercase;margin-top:2px;}
+
+  #status{
+    bottom:40px;left:46px;
+    font-size:12px;color:#7fa79f;letter-spacing:.18em;text-transform:uppercase;
+    display:flex;align-items:center;gap:10px;
+  }
+  #status .dot{
+    width:8px;height:8px;border-radius:50%;background:var(--bs-bright);
+    box-shadow:0 0 12px var(--bs-bright);
+    animation:blink 1.8s ease-in-out infinite;
+  }
+  @keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+  #metrics{
+    bottom:40px;right:46px;text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  #metrics .row{display:flex;justify-content:flex-end;align-items:baseline;gap:10px;margin-top:8px;}
+  #metrics .row:first-child{margin-top:0;}
+  #metrics .num{font-size:22px;font-weight:700;color:#EAFBF7;letter-spacing:.01em;}
+  #metrics .lab{font-size:10px;color:#6f968e;letter-spacing:.2em;text-transform:uppercase;width:118px;}
+
+  #hint{
+    top:42px;right:46px;
+    font-size:11px;color:#5a807a;letter-spacing:.16em;text-transform:uppercase;
+  }
+
+  #loader{
+    position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    z-index:20;color:#7fa79f;font-size:13px;letter-spacing:.2em;text-transform:uppercase;
+    transition:opacity .6s ease;
+  }
+  #loader.hide{opacity:0;pointer-events:none;}
+</style>
+</head>
+<body>
+  <div id="stage" data-screen-label="Globe">
+    <canvas id="globe"></canvas>
+  </div>
+
+  <div class="hud" id="brand">
+    <div class="mark"></div>
+    <div class="txt"><b>Bite Size AI</b><span>Global Activity Network</span></div>
+  </div>
+  <div class="hud" id="hint">Drag to rotate</div>
+  <div class="hud" id="status"><span class="dot"></span><span id="statusText">Live · synchronizing nodes</span></div>
+  <div class="hud" id="metrics">
+    <div class="row"><span class="num" id="mNodes">0</span><span class="lab">Active nodes</span></div>
+    <div class="row"><span class="num" id="mReq">0</span><span class="lab">Requests / sec</span></div>
+    <div class="row"><span class="num" id="mLat">0</span><span class="lab">Avg latency ms</span></div>
+  </div>
+
+  <div id="loader">Initializing global mesh…</div>
+
+  <script src="globe.js"></script>
+</body>
+</html>
