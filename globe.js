@@ -1,4 +1,4 @@
-/* Bite Size AI — Global Activity Globe
+/* Telling Technology — Global Activity Globe
    Canvas 2D + d3-geo orthographic projection. Real continents, glowing
    coastlines, blue atmosphere, pulsing city activity, auto-rotate + drag. */
 (function () {

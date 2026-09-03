@@ -1,4 +1,4 @@
-/* Bite Size AI — Globe overlay engine
+/* Telling Technology — Globe overlay engine
    Two overlay modes on top of the rotating globe (globe.js):
      • "My Network"  — your LinkedIn connections placed across global hubs,
                        lighting up with monogram avatars as the Earth turns.
